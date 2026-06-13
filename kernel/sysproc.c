@@ -101,7 +101,18 @@ sys_uptime(void)
 uint64
 sys_flip_display(void)
 {
-  return -1;
+  uint64 va;
+  argaddr(0, &va);
+  struct proc *p = myproc();
+  if (va % PGSIZE != 0)
+    return -1;
+  for (int i = 0; i < GPU_FB_PAGES; i++)
+  {
+    pte_t *pte = walk(p->pagetable, va + i * PGSIZE, 0);
+    if (!pte || !(*pte & PTE_V))
+      return -1;
+  }
+  return virtio_gpu_flip(p->pagetable, va, GPU_FB_PAGES);
 }
 
 // sys_map_display: map the GPU's kernel framebuffer pages (fb[]) directly
@@ -116,5 +127,33 @@ sys_flip_display(void)
 uint64
 sys_map_display(void)
 {
-  return -1;
+  uint64 address;
+  argaddr(0, &address);
+  struct proc *p = myproc();
+  if(address == 0){
+    address = PGROUNDUP(p->sz);
+  }else{
+    if(address % PGSIZE != 0){
+      return -1;
+    }
+    for(int i = 0; i < GPU_FB_PAGES; i++){
+      pte_t *pte = walk(p->pagetable, address + i * PGSIZE, 0);
+      if(pte && (*pte & PTE_V)){
+        return -1;
+      }
+    }
+  }
+  if (address + (uint64)GPU_FB_PAGES * PGSIZE > TRAPFRAME)
+    return -1;
+    
+  for (int i = 0; i < GPU_FB_PAGES; i++) {
+      uint64 pa = (uint64)virtio_gpu_fb_page(i);   // physical address of this GPU page
+      if (mappages(p->pagetable, address + (uint64)i * PGSIZE, PGSIZE, pa, PTE_U | PTE_R | PTE_W) != 0) {
+          if (i > 0)
+              uvmunmap(p->pagetable, address, i, 0);  // 0 = do NOT free the GPU pages
+          return -1;
+      }
+  }
+  p->display_va = address;
+  return address;
 }
