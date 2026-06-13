@@ -158,8 +158,15 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
-  if(p->pagetable)
+  if(p->pagetable){
+    if(p->display_va){
+      // If the process has the framebuffer mapped, unmap it and reset display_va to 0.
+      uvmunmap(p->pagetable, p->display_va, GPU_FB_PAGES, 0);
+      p->display_va = 0;
+    }  
     proc_freepagetable(p->pagetable, p->sz);
+  }
+  
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
