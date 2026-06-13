@@ -578,3 +578,30 @@ void display_daemon(void)
         acquire(&tickslock);
     }
 }
+
+// fb is static (local to this file) so this function is built so Code in sysproc.c can access the framebuffer pages without exposing the fb[] array itself.
+void *virtio_gpu_fb_page(int i){
+    return fb[i];
+}
+
+int virtio_gpu_flip(pagetable_t pt, uint64 va, int npages)
+{
+    if (va % PGSIZE != 0)
+        return -1;
+    if (npages > FB_PAGES)
+        return -1;
+
+    struct virtio_gpu_mem_entry entries[FB_PAGES];
+    for (int i = 0; i < npages; i++)
+    {
+        uint64 pa = walkaddr(pt, va + i * PGSIZE);
+        if (pa == 0)
+            return -1;
+        entries[i].addr = pa;
+        entries[i].length = PGSIZE;
+    }
+    gpu_cmd_detach();
+    gpu_cmd_attach(entries, npages);
+    gpu_transfer_flush();
+    return 0;
+}
