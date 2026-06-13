@@ -104,4 +104,9 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // **added**
+
+  uint64 display_va;   // virtual address where fb[] was mapped, or 0 if not mapped
+  
 };
